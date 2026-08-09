@@ -48,8 +48,8 @@
           <p>A commitment to the collective good.</p>
         </div>
         <div class="pillar">
-          <h3>Sincerity</h3>
-          <p>Transparent and honest operations.</p>
+          <h3>Permanence</h3>
+          <p>Liquidity locked forever enables durability, stability, and an enduring existence.</p>
         </div>
         <div class="pillar">
           <h3>Communication</h3>
@@ -70,22 +70,67 @@
       <p class="sub">A robust and highly secure supply structure designed for long-term sustainability.</p>
       <div class="token-grid">
         <div class="token-card">
-          <span class="label">Total / Circulating Supply</span>
-          <span class="value">330,000,000</span>
+          <span class="label">Circulating Supply</span>
+          <span class="value" id="stat-circulating">329,943,327</span>
+          <span class="hint" id="hint-circulating">of 449,943,882 total supply</span>
         </div>
         <div class="token-card">
           <span class="label">Tokens Burned (dEaD)</span>
-          <span class="value">119,000,000</span>
+          <span class="value" id="stat-burned">120,000,555.0001</span>
+          <span class="hint" id="hint-burned">26.67% of total supply</span>
         </div>
         <div class="token-card">
           <span class="label">Locked Forever</span>
           <span class="value">~144,000,000</span>
+          <span class="hint">Liquidity locked permanently</span>
         </div>
       </div>
       <div class="contract">
         <span class="label">Ethereum Contract</span>
         <code>0xed12920731ce0e4c61d52fa1580c0092fd5bd1fe</code>
       </div>
+    </div>
+  </section>
+
+  <!-- Liquidity Pools -->
+  <section class="liquidity" id="liquidity">
+    <div class="container">
+      <h2>Active Liquidity Pools</h2>
+      <p class="sub">Live on-chain liquidity across every active 転生 trading pair.</p>
+
+      <div class="liq-summary">
+        <div class="liq-stat">
+          <span class="label">Total Liquidity</span>
+          <span class="value" id="stat-liquidity">&mdash;</span>
+        </div>
+        <div class="liq-stat">
+          <span class="label">Market Cap</span>
+          <span class="value" id="stat-mcap">&mdash;</span>
+        </div>
+        <div class="liq-stat">
+          <span class="label">Liquidity / Market Cap</span>
+          <span class="value" id="stat-ratio">&mdash;</span>
+        </div>
+      </div>
+
+      <div class="pool-table">
+        <div class="pool-head">
+          <span>Pair</span>
+          <span class="pool-dex">Exchange</span>
+          <span class="num">Liquidity</span>
+          <span class="num pool-vol">24h Volume</span>
+          <span class="num">24h</span>
+        </div>
+        <div class="pool-body" id="pool-rows">
+          <div class="pool-empty">Loading live pool data&hellip;</div>
+        </div>
+      </div>
+
+      <p class="liq-foot">
+        <span id="liq-status">Connecting&hellip;</span>
+        &middot; Data from <a href="https://www.geckoterminal.com/eth/tokens/0xed12920731ce0e4c61d52fa1580c0092fd5bd1fe" target="_blank" rel="noopener">GeckoTerminal</a>
+        &amp; the Ethereum network
+      </p>
     </div>
   </section>
 
@@ -153,6 +198,209 @@
       </a>
     </div>
   </footer>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var TOKEN     = '0xed12920731ce0e4c61d52fa1580c0092fd5bd1fe';
+    var POOLS_URL = 'https://api.geckoterminal.com/api/v2/networks/eth/tokens/' + TOKEN + '/pools?include=base_token,quote_token';
+    var RPCS      = ['https://ethereum-rpc.publicnode.com', 'https://eth.drpc.org', 'https://eth.merkle.io'];
+
+    // ERC-20 calldata: totalSupply() and balanceOf(0x...dEaD)
+    var CALL_TOTAL_SUPPLY = '0x18160ddd';
+    var CALL_BALANCE_DEAD = '0x70a08231000000000000000000000000000000000000000000000000000000000000dEaD';
+
+    var TOP_N      = 5;
+    var REFRESH_MS = 30000;
+    var MAJORS     = ['USDC', 'WETH', 'USDT', 'DAI', 'WBTC'];
+
+    function $(id) { return document.getElementById(id); }
+
+    // Tolerate missing markup — a removed card must never break the rest of the update.
+    function setText(id, value) { var el = $(id); if (el) el.textContent = value; }
+    function setHTML(id, value) { var el = $(id); if (el) el.innerHTML = value; }
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    // Pool symbols come from a third party, so never trust them into an href.
+    function safeAddr(a) { return /^0x[a-fA-F0-9]{40,64}$/.test(a || '') ? a : ''; }
+
+    function num(n, dp) {
+      return n.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+    }
+
+    function usd(n) {
+      var dp = n >= 1000 ? 0 : 2;
+      return '$' + n.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+    }
+
+    function fromWei(hex) {
+      var v = BigInt(hex), base = 1000000000000000000n;
+      return Number(v / base) + Number(v % base) / 1e18;
+    }
+
+    // --- On-chain supply / burn -------------------------------------------
+    function readChain() {
+      var i = 0;
+      function attempt() {
+        if (i >= RPCS.length) return Promise.resolve(null);
+        var url = RPCS[i++];
+        return Promise.all([CALL_TOTAL_SUPPLY, CALL_BALANCE_DEAD].map(function (data) {
+          return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: TOKEN, data: data }, 'latest'] })
+          }).then(function (r) { return r.json(); });
+        })).then(function (out) {
+          var total = out[0] && out[0].result, dead = out[1] && out[1].result;
+          if (!total || !dead || total === '0x' || dead === '0x') return attempt();
+          return { total: fromWei(total), burned: fromWei(dead) };
+        }).catch(attempt);
+      }
+      return attempt();
+    }
+
+    // --- Pools -------------------------------------------------------------
+    function dexLabel(id) {
+      if (!id) return 'Uniswap';
+      if (id.indexOf('v4') > -1) return 'Uniswap V4';
+      if (id.indexOf('v3') > -1) return 'Uniswap V3';
+      if (id.indexOf('v2') > -1) return 'Uniswap V2';
+      return id.replace(/[-_]/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    }
+
+    function readPools() {
+      return fetch(POOLS_URL, { headers: { Accept: 'application/json' } }).then(function (r) {
+        if (!r.ok) throw new Error('GeckoTerminal ' + r.status);
+        return r.json();
+      }).then(function (j) {
+        var symbols = {};
+        (j.included || []).forEach(function (t) {
+          symbols[t.id] = (t.attributes && t.attributes.symbol) || '?';
+        });
+
+        var ourId = 'eth_' + TOKEN;
+        return (j.data || []).map(function (p) {
+          var a = p.attributes || {}, rel = p.relationships || {};
+          var baseId  = rel.base_token  && rel.base_token.data  && rel.base_token.data.id;
+          var quoteId = rel.quote_token && rel.quote_token.data && rel.quote_token.data.id;
+          var weAreBase = baseId === ourId;
+          var fee = /\s(\d+(?:\.\d+)?)%\s*$/.exec(a.name || '');
+          return {
+            address: safeAddr(a.address),
+            other:   symbols[weAreBase ? quoteId : baseId] || 'Token',
+            fee:     fee ? fee[1] + '%' : '',
+            dex:     dexLabel(rel.dex && rel.dex.data && rel.dex.data.id),
+            liq:     parseFloat(a.reserve_in_usd) || 0,
+            vol:     parseFloat(a.volume_usd && a.volume_usd.h24) || 0,
+            chg:     parseFloat(a.price_change_percentage && a.price_change_percentage.h24) || 0,
+            price:   parseFloat(weAreBase ? a.base_token_price_usd : a.quote_token_price_usd) || 0
+          };
+        }).sort(function (x, y) { return y.liq - x.liq; });
+      });
+    }
+
+    // Prefer the deepest pool quoted in a major asset — exotic pairs drift.
+    function pickPrice(pools) {
+      var priced = pools.filter(function (p) { return p.price > 0; });
+      var major  = priced.filter(function (p) { return MAJORS.indexOf(p.other) > -1; });
+      var src    = (major.length ? major : priced)[0];
+      return src ? src.price : 0;
+    }
+
+    function renderPools(pools) {
+      var top = pools.filter(function (p) { return p.liq > 0; }).slice(0, TOP_N);
+
+      if (!top.length) {
+        setHTML('pool-rows', '<div class="pool-empty">No active pools found.</div>');
+        return;
+      }
+
+      setHTML('pool-rows', top.map(function (p) {
+        var cls  = p.chg > 0 ? 'up' : (p.chg < 0 ? 'down' : '');
+        var sign = p.chg > 0 ? '+' : '';
+        var open = p.address
+          ? '<a class="pool-row" href="https://www.geckoterminal.com/eth/pools/' + p.address + '" target="_blank" rel="noopener">'
+          : '<div class="pool-row">';
+        return open +
+            '<span class="pool-pair"><b>転生</b> / ' + esc(p.other) +
+              (p.fee ? ' <em>' + esc(p.fee) + '</em>' : '') + '</span>' +
+            '<span class="pool-dex">' + esc(p.dex) + '</span>' +
+            '<span class="num">' + usd(p.liq) + '</span>' +
+            '<span class="num pool-vol">' + usd(p.vol) + '</span>' +
+            '<span class="num ' + cls + '">' + sign + p.chg.toFixed(2) + '%</span>' +
+          (p.address ? '</a>' : '</div>');
+      }).join(''));
+    }
+
+    // --- Refresh loop ------------------------------------------------------
+    var everLoadedPools = false;
+
+    function update() {
+      return Promise.all([
+        readChain().catch(function () { return null; }),
+        readPools().catch(function () { return null; })
+      ]).then(function (r) {
+        var chain = r[0], pools = r[1], circulating = 0;
+
+        if (chain && chain.total > 0) {
+          circulating = chain.total - chain.burned;
+          setText('stat-burned',      num(chain.burned, 4));
+          setText('hint-burned',      (chain.burned / chain.total * 100).toFixed(2) + '% of total supply');
+          setText('stat-circulating', num(circulating, 0));
+          setText('hint-circulating', 'of ' + num(chain.total, 0) + ' total supply');
+        }
+
+        if (pools) {
+          everLoadedPools = true;
+          renderPools(pools);
+          var totalLiq = pools.reduce(function (s, p) { return s + p.liq; }, 0);
+          var price    = pickPrice(pools);
+          setText('stat-liquidity', usd(totalLiq));
+
+          if (circulating > 0 && price > 0) {
+            var mcap = price * circulating;
+            setText('stat-mcap',  usd(mcap));
+            setText('stat-ratio', (totalLiq / mcap * 100).toFixed(0) + '%');
+          }
+        } else if (!everLoadedPools) {
+          // Never clear a good table on a blip — only replace the initial placeholder.
+          setHTML('pool-rows', '<div class="pool-empty">Pool data temporarily unavailable.</div>');
+        }
+
+        var status = $('liq-status');
+        if (!status) return;
+        if (chain || pools) {
+          status.textContent = 'Live · updated ' +
+            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          status.classList.remove('stale');
+        } else {
+          status.textContent = 'Live data unavailable — showing last known values';
+          status.classList.add('stale');
+        }
+      });
+    }
+
+    var timer;
+    function schedule() {
+      clearTimeout(timer);
+      if (document.visibilityState === 'hidden') return; // don't burn rate limit in a background tab
+      timer = setTimeout(function () { update().then(schedule); }, REFRESH_MS);
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') update().then(schedule);
+      else clearTimeout(timer);
+    });
+
+    update().then(schedule);
+  })();
+  </script>
 
 </body>
 </html>

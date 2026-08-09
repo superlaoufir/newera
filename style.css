@@ -217,6 +217,14 @@ h2 {
   font-size: 1.4rem;
   font-weight: 700;
   color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.token-card .hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 .contract {
@@ -241,6 +249,169 @@ h2 {
   color: var(--gold);
   word-break: break-all;
   font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* === Liquidity Pools === */
+.liquidity {
+  padding: 80px 0;
+}
+
+.liquidity .sub {
+  color: var(--text-muted);
+  margin-bottom: 32px;
+}
+
+.liq-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.liq-stat {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.liq-stat .label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.liq-stat .value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.pool-table {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.pool-head,
+.pool-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 12px;
+  align-items: center;
+  padding: 14px 20px;
+}
+
+.pool-head {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.pool-row {
+  border-top: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--text);
+  font-size: 0.92rem;
+  transition: background 0.15s ease;
+}
+
+.pool-body > .pool-row:first-child {
+  border-top: none;
+}
+
+.pool-row:hover {
+  background: var(--bg-card-hover);
+}
+
+.pool-pair {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pool-pair b {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.pool-pair em {
+  font-style: normal;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.pool-dex {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.pool-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pool-row .up {
+  color: #4ac07a;
+}
+
+.pool-row .down {
+  color: #d9534f;
+}
+
+.pool-empty {
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.liq-foot {
+  margin-top: 14px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.liq-foot a {
+  color: var(--text-muted);
+}
+
+.liq-foot a:hover {
+  color: var(--gold);
+}
+
+#liq-status::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  margin-right: 7px;
+  vertical-align: middle;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+#liq-status.stale::before {
+  background: var(--text-muted);
+  animation: none;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #liq-status::before { animation: none; }
 }
 
 /* === Chart === */
@@ -357,6 +528,21 @@ footer p {
 
   .token-grid {
     grid-template-columns: 1fr;
+  }
+
+  .liq-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .pool-head,
+  .pool-row {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.8fr);
+    padding: 14px;
+  }
+
+  .pool-dex,
+  .pool-vol {
+    display: none;
   }
 
   .link-grid {
